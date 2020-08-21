@@ -150,8 +150,9 @@ fn main() {
     let builder = gtk::BoxBuilder::new()
         .orientation(Vertical)
         .vexpand(true)
+        .width_request(512)
         .halign(gtk::Align::Fill)
-        .spacing(12);
+        .spacing(18);
 
     let vbox = builder.build();
     if is_unknown {
@@ -198,10 +199,9 @@ fn main() {
     };
 
     // Create a new window and add our layout container to it.
-    let window = Window::new(WindowType::Toplevel);
-    window.set_border_width(12);
+    let window =gtk::WindowBuilder::new().icon_name("xfce-system-settings").type_(WindowType::Toplevel).border_width(12).title("XFCE Gala Settings").resizable(false).build();
+
     window.add(&vbox);
-    window.set_resizable(false);
 
     // Now we're going to create two event streams. The first stream will be
     // passed messages directly from the widgets in the application, and will
