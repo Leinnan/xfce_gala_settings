@@ -1,0 +1,16 @@
+image: archlinux
+packages:
+  - rustup
+tasks:
+  - prepare: |
+      rustup toolchain install stable
+      cd xfce_gala_settings/
+      rustup run stable cargo fetch
+      cargo install cargo-deb
+  - build: |
+      cd xfce_gala_settings/
+      cargo build --release
+  - deb: |
+      cd xfce_gala_settings/
+      cargo deb
+      curl --upload-file ./target/debian/xfce_gala_settings_0.1.0_amd64.deb https://transfer.sh/wall_setter.deb
