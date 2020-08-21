@@ -1,6 +1,13 @@
 image: archlinux
 packages:
   - rustup
+  - gtk3
+  - glib2
+  - gdk-pixbuf2
+  - atk
+  - mesa
+  - cairo
+  - pango
 tasks:
   - prepare: |
       rustup toolchain install stable
