@@ -22,11 +22,12 @@
 use gtk::Orientation::Vertical;
 use gtk::{
     Button, ButtonExt, CheckButton, ContainerExt, Inhibit, Label, LabelExt, ToggleButtonExt,
-    WidgetExt, Window, WindowType,
+    WidgetExt, Window, WindowType, GtkWindowExt
 };
 use relm::EventStream;
 
 use std::{env, fs, io};
+use std::io::Write;
 use Msg::*;
 
 // There will be several widgets involved in this example, but this struct
@@ -106,15 +107,28 @@ pub fn get_window_manager_in_config() -> WindowManager {
 pub fn replace_window_manager_in_config() {
     let file = get_window_manager_xml_path();
     let contents = fs::read_to_string(&file).expect("Something went wrong reading the file");
+    let mut window_manager = WindowManager::Gala;
 
     let result = if contents.contains("\"xfwm4\"") {
         contents.replace("\"xfwm4\"", "\"gala\"")
     } else if contents.contains("\"gala\"") {
+        window_manager = WindowManager::XFWM4;
         contents.replace("\"gala\"", "\"xfwm4\"")
     } else {
         contents
     };
     fs::write(&file, result);
+    use std::process::Command;
+    let command_name = if window_manager == WindowManager::Gala {
+        "gala"
+    } else {
+        "xfwm4"
+    };
+    let output = Command::new(command_name)
+        .arg("--replace")
+        .spawn()
+        .expect("Failed to execute command");
+    println!("{:?}",output);
 }
 
 pub fn prepare() {
@@ -127,22 +141,47 @@ pub fn prepare() {
 
 fn main() {
     prepare();
+    let start_window_manager = get_window_manager_in_config();
+    let is_gala = start_window_manager == WindowManager::Gala;
+    let is_unknown = start_window_manager == WindowManager::Unknown;
     gtk::init().expect("gtk::init failed");
 
     // This is a layout container that will stack widgets vertically.
     let builder = gtk::BoxBuilder::new()
-        .margin(18)
         .orientation(Vertical)
+        .vexpand(true)
+        .halign(gtk::Align::Fill)
         .spacing(12);
 
     let vbox = builder.build();
+    if is_unknown {
+        let category_label = gtk::LabelBuilder::new()
+        .justify(gtk::Justification::Center)
+        .halign(gtk::Align::Fill)
+        .vexpand(true)
+        .use_markup(true)
+        .label(&format!("<span foreground=\"red\"><big>Cannot determine current window manager,\ncheck file: {}</big></span>", get_window_manager_xml_path()))
+        .build();
+        vbox.add(&category_label);
+    }
 
-    let is_gala = get_window_manager_in_config() == WindowManager::Gala;
     let use_gala_checkbox = gtk::CheckButtonBuilder::new()
         .label("Use Gala window manager")
         .active(is_gala)
+        .vexpand(true)
+        .sensitive(!is_unknown)
+        .halign(gtk::Align::Fill)
         .build();
     vbox.add(&use_gala_checkbox);
+    let category_label = gtk::LabelBuilder::new()
+        .justify(gtk::Justification::Left)
+        .halign(gtk::Align::Start)
+        .vexpand(true)
+        .use_markup(true)
+        .sensitive(!is_unknown)
+        .label("<b>Gala options</b>")
+        .build();
+    vbox.add(&category_label);
     // Add some widgets to the layout.
     let plus_button = Button::with_label("+");
     vbox.add(&plus_button);
@@ -160,7 +199,9 @@ fn main() {
 
     // Create a new window and add our layout container to it.
     let window = Window::new(WindowType::Toplevel);
+    window.set_border_width(12);
     window.add(&vbox);
+    window.set_resizable(false);
 
     // Now we're going to create two event streams. The first stream will be
     // passed messages directly from the widgets in the application, and will
@@ -257,4 +298,20 @@ fn main() {
     });
 
     gtk::main();
+
+
+    let end_window_manager = get_window_manager_in_config();
+    if start_window_manager != end_window_manager {
+        use std::process::Command;
+        let command_name = if end_window_manager == WindowManager::Gala {
+            "gala"
+        } else {
+            "xfwm4"
+        };
+        let output = Command::new(command_name)
+            .arg("--replace")
+            .spawn()
+            .expect("Failed to execute command");
+        println!("{:?}",output);
+    }
 }
