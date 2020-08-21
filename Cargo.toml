@@ -17,7 +17,7 @@ section = "utility"
 priority = "optional"
 assets = [
     ["target/release/xfce_gala_settings", "usr/bin/", "755"],
-    ["target/xfce_gala_settings.desktop", "usr/share/applications", "755"],
+    ["target/xfce_gala_settings.desktop", "usr/share/applications/", "755"],
 ]
 
 [dependencies]
