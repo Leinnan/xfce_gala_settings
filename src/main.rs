@@ -1,23 +1,4 @@
-/*
- * Copyright (c) 2017 Boucher, Antoni <bouanto@zoho.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+extern crate dconf_rs;
 
 use gtk::Orientation::Vertical;
 use gtk::{
@@ -25,16 +6,19 @@ use gtk::{
     WidgetExt, Window, WindowType, GtkWindowExt
 };
 use relm::EventStream;
-
 use std::{env, fs, io};
-use std::io::Write;
 use Msg::*;
+use crate::settings::*;
+
+mod settings;
 
 // There will be several widgets involved in this example, but this struct
 // will act as a container just for the widgets that we will be updating.
 struct Widgets {
     use_gala_checkbox: CheckButton,
-    counter_label: Label,
+    edge_tiling_checkbox: CheckButton,
+    dynamic_workspaces_checkbox: CheckButton,
+    animations_checkbox: CheckButton,
 }
 
 // This enum holds the various messages that will be passed between our
@@ -43,9 +27,10 @@ struct Widgets {
 // `relm` depends on.
 #[derive(Clone, Debug)]
 enum Msg {
+    Animations,
+    DynamicWorkspaces,
+    EdgeTiling,
     ChangeWindowManager,
-    Decrement,
-    Increment,
     Quit,
 }
 
@@ -59,7 +44,7 @@ pub enum WindowManager {
 // This struct represents the model, and it maintains the state needed to
 // populate the widget. The model is updated in the `update` method.
 struct Model {
-    counter: i32,
+    settings: Settings
 }
 
 pub fn get_window_manager_xml_path() -> String {
@@ -144,15 +129,16 @@ fn main() {
     let start_window_manager = get_window_manager_in_config();
     let is_gala = start_window_manager == WindowManager::Gala;
     let is_unknown = start_window_manager == WindowManager::Unknown;
+    let gala_settings = Settings::load();
     gtk::init().expect("gtk::init failed");
 
     // This is a layout container that will stack widgets vertically.
     let builder = gtk::BoxBuilder::new()
         .orientation(Vertical)
         .vexpand(true)
-        .width_request(512)
+        // .width_request(512)
         .halign(gtk::Align::Fill)
-        .spacing(18);
+        .spacing(12);
 
     let vbox = builder.build();
     if is_unknown {
@@ -183,23 +169,49 @@ fn main() {
         .label("<b>Gala options</b>")
         .build();
     vbox.add(&category_label);
-    // Add some widgets to the layout.
-    let plus_button = Button::with_label("+");
-    vbox.add(&plus_button);
-    let counter_label = Label::new(Some("0"));
-    vbox.add(&counter_label);
-    let minus_button = Button::with_label("-");
-    vbox.add(&minus_button);
+    let edge_tiling_checkbox = gtk::CheckButtonBuilder::new()
+        .label("Enable edge tiling")
+        .active(gala_settings.edge_tiling)
+        .vexpand(true)
+        .sensitive(!is_unknown)
+        .halign(gtk::Align::Fill)
+        .build();
+    vbox.add(&edge_tiling_checkbox);
+
+    let dynamic_workspaces_checkbox = gtk::CheckButtonBuilder::new()
+        .label("Dynamic workspaces")
+        .active(gala_settings.dynamic_workspaces)
+        .vexpand(true)
+        .sensitive(!is_unknown)
+        .halign(gtk::Align::Fill)
+        .build();
+    vbox.add(&dynamic_workspaces_checkbox);
+
+    let anim_checkbox = gtk::CheckButtonBuilder::new()
+        .label("Enable animations")
+        .active(gala_settings.animations)
+        .vexpand(true)
+        .sensitive(!is_unknown)
+        .halign(gtk::Align::Fill)
+        .build();
+    vbox.add(&anim_checkbox);
 
     // As mentioned above, this struct holds the labels that we're going
     // to be updating.
     let widgets = Widgets {
+        edge_tiling_checkbox: edge_tiling_checkbox,
         use_gala_checkbox: use_gala_checkbox,
-        counter_label: counter_label,
+        dynamic_workspaces_checkbox: dynamic_workspaces_checkbox,
+        animations_checkbox: anim_checkbox
     };
 
     // Create a new window and add our layout container to it.
-    let window =gtk::WindowBuilder::new().icon_name("xfce-system-settings").type_(WindowType::Toplevel).border_width(12).title("XFCE Gala Settings").resizable(false).build();
+    let window =gtk::WindowBuilder::new()
+    .icon_name("xfce-system-settings")
+    .type_(WindowType::Toplevel).border_width(18)
+    .title("XFCE Gala Settings")
+    // .resizable(false)
+    .build();
 
     window.add(&vbox);
 
@@ -228,12 +240,22 @@ fn main() {
             echo_stream.emit(event.clone());
         });
     }
-
-    // Send the `Increment` message when `plus_button` emits the `clicked` signal.
     {
         let stream = main_stream.clone();
-        plus_button.connect_clicked(move |_| {
-            stream.emit(Increment);
+        widgets.edge_tiling_checkbox.connect_clicked(move |_| {
+            stream.emit(EdgeTiling);
+        });
+    }
+    {
+        let stream = main_stream.clone();
+        widgets.dynamic_workspaces_checkbox.connect_clicked(move |_| {
+            stream.emit(DynamicWorkspaces);
+        });
+    }
+    {
+        let stream = main_stream.clone();
+        widgets.animations_checkbox.connect_clicked(move |_| {
+            stream.emit(Animations);
         });
     }
 
@@ -242,14 +264,6 @@ fn main() {
         let stream = main_stream.clone();
         widgets.use_gala_checkbox.connect_clicked(move |_| {
             stream.emit(ChangeWindowManager);
-        });
-    }
-
-    // Send the `Decrement` message when `minus_button` emits the `clicked` signal.
-    {
-        let stream = main_stream.clone();
-        minus_button.connect_clicked(move |_| {
-            stream.emit(Decrement);
         });
     }
 
@@ -265,29 +279,25 @@ fn main() {
     }
 
     // Create the initial state of the model.
-    let mut model = Model { counter: 0 };
+    let mut model = Model { settings: gala_settings };
 
     // Here we respond to messages that are generated and update the model.
     fn update(event: Msg, model: &mut Model, widgets: &Widgets) {
         match event {
+            Animations => {
+                model.settings.animations = !model.settings.animations;
+                model.settings.save();
+            }
+            DynamicWorkspaces => {
+                model.settings.dynamic_workspaces = !model.settings.dynamic_workspaces;
+                model.settings.save();
+            }
+            EdgeTiling => {
+                model.settings.edge_tiling = !model.settings.edge_tiling;
+                model.settings.save();
+            }
             ChangeWindowManager => {
-                {
-                    let cur_value = get_window_manager_in_config();
-                    println!("{:?}", cur_value);
-                }
                 replace_window_manager_in_config();
-                {
-                    let cur_value = get_window_manager_in_config();
-                    println!("{:?}", cur_value);
-                }
-            }
-            Decrement => {
-                model.counter -= 1;
-                widgets.counter_label.set_text(&model.counter.to_string());
-            }
-            Increment => {
-                model.counter += 1;
-                widgets.counter_label.set_text(&model.counter.to_string());
             }
             Quit => gtk::main_quit(),
         }
@@ -308,10 +318,9 @@ fn main() {
         } else {
             "xfwm4"
         };
-        let output = Command::new(command_name)
+        let _ = Command::new(command_name)
             .arg("--replace")
             .spawn()
             .expect("Failed to execute command");
-        println!("{:?}",output);
     }
 }
