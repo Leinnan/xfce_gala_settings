@@ -132,11 +132,12 @@ fn main() {
     let gala_settings = Settings::load();
     gtk::init().expect("gtk::init failed");
 
+
     // This is a layout container that will stack widgets vertically.
     let builder = gtk::BoxBuilder::new()
         .orientation(Vertical)
         .vexpand(true)
-        // .width_request(512)
+        .width_request(300)
         .halign(gtk::Align::Fill)
         .spacing(12);
 
@@ -205,15 +206,19 @@ fn main() {
         animations_checkbox: anim_checkbox
     };
 
+    let viewport = gtk::ViewportBuilder::new().border_width(18).hscroll_policy(gtk::ScrollablePolicy::Minimum).build();
+    let scrolled_win = gtk::ScrolledWindowBuilder::new().min_content_height(200).min_content_width(350).build();
+    viewport.add(&vbox);
+    scrolled_win.add(&viewport);
     // Create a new window and add our layout container to it.
     let window =gtk::WindowBuilder::new()
     .icon_name("xfce-system-settings")
-    .type_(WindowType::Toplevel).border_width(18)
+    .type_(WindowType::Toplevel)
     .title("XFCE Gala Settings")
     // .resizable(false)
     .build();
 
-    window.add(&vbox);
+    window.add(&scrolled_win);
 
     // Now we're going to create two event streams. The first stream will be
     // passed messages directly from the widgets in the application, and will
